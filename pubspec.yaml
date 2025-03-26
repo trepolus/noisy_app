@@ -28,6 +28,7 @@ environment:
 flutter:
   assets:
     - assets/sounds/leiwand.m4a
+    - assets/sounds/white_noise.mp3
   uses-material-design: true
 
 dependencies:
