@@ -1,10 +1,12 @@
+import 'dart:async';
+
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 import '../services/location_service.dart';
 import '../widgets/custom_map.dart';
-import 'dart:async';
-import 'package:audioplayers/audioplayers.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -17,6 +19,12 @@ class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   final LocationService _locationService = LocationService();
   Map<MarkerId, Marker> _markers = {};
+  final AudioPlayer _whiteNoisePlayer = AudioPlayer();
+  double _currentVolume = 0.0;
+
+  static const double _minVolume = 0.0;
+  static const double _maxVolume = 1.0;
+  static const double _volumeTriggerRadius = 100.0; // max effect range
 
   final LatLng _defaultLocation = const LatLng(52.52, 13.405); // Berlin
   LatLng? _currentLocation;
@@ -26,12 +34,12 @@ class _MapScreenState extends State<MapScreen> {
 
   static const double _triggerRadiusMeters = 20.0;
 
-
   @override
   void initState() {
     super.initState();
     _loadCurrentLocation();
     _startLiveLocation();
+    _startWhiteNoise();
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -65,23 +73,37 @@ class _MapScreenState extends State<MapScreen> {
         CameraUpdate.newLatLng(newLocation),
       );
 
-      // 🔊 Check proximity to each marker
+      // 🔊 Dynamic white noise volume based on distance to closest POI
+      double closestDistance = double.infinity;
+
       for (var entry in _markers.entries) {
-        final markerId = entry.key;
         final marker = entry.value;
+        final distance = Geolocator.distanceBetween(
+          newLocation.latitude,
+          newLocation.longitude,
+          marker.position.latitude,
+          marker.position.longitude,
+        );
 
-        if (_alreadyPlayed.contains(markerId)) continue;
-
-        if (_isWithinRange(newLocation, marker.position, _triggerRadiusMeters)) {
-          debugPrint('🔊 Playing sound for ${markerId.value}');
-          await _audioPlayer.play(AssetSource('sounds/leiwand.m4a'));
-          _showUnicornEmoji();
-          _alreadyPlayed.add(markerId);
+        if (distance < closestDistance) {
+          closestDistance = distance;
         }
+      }
+
+      double volume = 0.0;
+      if (closestDistance <= _volumeTriggerRadius) {
+        volume = 1.0 - (closestDistance / _volumeTriggerRadius);
+        volume = volume.clamp(_minVolume, _maxVolume);
+      } else {
+        volume = 0.0;
+      }
+
+      if ((_currentVolume - volume).abs() > 0.01) {
+        _currentVolume = volume;
+        await _whiteNoisePlayer.setVolume(_currentVolume);
       }
     });
   }
-
 
   void _handleMapTap(LatLng latLng) {
     final markerId = MarkerId('marker_${latLng.latitude}_${latLng.longitude}');
@@ -91,7 +113,8 @@ class _MapScreenState extends State<MapScreen> {
       position: latLng,
       infoWindow: InfoWindow(
         title: 'Pinned Location',
-        snippet: '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}',
+        snippet:
+            '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}',
       ),
       onTap: () {
         setState(() {
@@ -135,6 +158,11 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
+  void _startWhiteNoise() async {
+    await _whiteNoisePlayer.setReleaseMode(ReleaseMode.loop);
+    await _whiteNoisePlayer.setVolume(0.0);
+    await _whiteNoisePlayer.play(AssetSource('sounds/white_noise.mp3'));
+  }
 
   @override
   void dispose() {
@@ -161,20 +189,21 @@ class _MapScreenState extends State<MapScreen> {
         title: const Text('Leiwande Location'),
         backgroundColor: Colors.deepPurple, // 🎨 Purple!
       ),
-        body: CustomMap(
-          initialPosition: mapCenter,
-          markers: _markers.values.toSet().union({
-            if (_currentLocation != null)
-              Marker(
-                markerId: const MarkerId('user_location'),
-                position: _currentLocation!,
-                infoWindow: const InfoWindow(title: "You are here"),
-                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-              ),
-          }),
-          onMapCreated: (controller) => _mapController = controller,
-          onTap: _handleMapTap,
-        ),
+      body: CustomMap(
+        initialPosition: mapCenter,
+        markers: _markers.values.toSet().union({
+          if (_currentLocation != null)
+            Marker(
+              markerId: const MarkerId('user_location'),
+              position: _currentLocation!,
+              infoWindow: const InfoWindow(title: "You are here"),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueAzure),
+            ),
+        }),
+        onMapCreated: (controller) => _mapController = controller,
+        onTap: _handleMapTap,
+      ),
     );
   }
 }
