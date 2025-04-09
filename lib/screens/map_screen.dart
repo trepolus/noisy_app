@@ -67,6 +67,8 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _updateWhiteNoiseVolume(double distance) async {
+    if (!_isVolumeEnabled) return; // Don't update volume if muted
+
     double newVolume = 0.0;
     if (distance <= _volumeTriggerRadius) {
       newVolume = 1.0 - (distance / _volumeTriggerRadius);
@@ -273,9 +275,10 @@ class _MapScreenState extends State<MapScreen> {
       _isVolumeEnabled = !_isVolumeEnabled;
     });
     if (_isVolumeEnabled) {
+      await _whiteNoisePlayer.play(AssetSource('sounds/white_noise.mp3'));
       await _whiteNoisePlayer.setVolume(_currentVolume);
     } else {
-      await _whiteNoisePlayer.setVolume(0.0);
+      await _whiteNoisePlayer.stop();
     }
     _addDebugLog("Volume ${_isVolumeEnabled ? 'enabled' : 'disabled'}");
   }
