@@ -9,6 +9,7 @@ import '../models/poi.dart';
 import '../services/location_service.dart';
 import '../services/poi_service.dart';
 import '../widgets/custom_map.dart';
+import '../widgets/debug_overlay.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -33,6 +34,9 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<Position>? _positionStream;
   Set<String> _triggeredPOIs = {};
   double _currentVolume = 0.0;
+  final List<String> _debugLogs = [];
+  bool _isDebugVisible = false;
+  bool _isVolumeEnabled = true;
 
   // Constants
   static const double _minVolume = 0.0;
@@ -48,9 +52,11 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _initializeApp() async {
+    _addDebugLog("Initializing app...");
     await _initializeAudio();
     await _loadPOIs();
     await _initializeLocation();
+    _addDebugLog("App initialization complete");
   }
 
   // Audio Handling
@@ -70,6 +76,7 @@ class _MapScreenState extends State<MapScreen> {
     if ((_currentVolume - newVolume).abs() > 0.01) {
       _currentVolume = newVolume;
       await _whiteNoisePlayer.setVolume(_currentVolume);
+      _addDebugLog("Updated white noise volume: $_currentVolume");
     }
   }
 
@@ -143,6 +150,7 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _handleLocationUpdate(Position position) async {
     final newLocation = LatLng(position.latitude, position.longitude);
     _updateLocation(newLocation);
+    _addDebugLog("Location updated: ${position.latitude}, ${position.longitude}");
 
     final closestPOI = _poiService.findClosestPOI(
       newLocation.latitude,
@@ -156,14 +164,17 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       await _updateWhiteNoiseVolume(distance);
+      _addDebugLog("Distance to closest POI (${closestPOI.name}): ${distance.toStringAsFixed(2)}m");
 
       if (distance <= closestPOI.triggerRadius && 
           !_triggeredPOIs.contains(closestPOI.id)) {
         _showStoryDialog(closestPOI);
         _triggeredPOIs.add(closestPOI.id);
+        _addDebugLog("Triggered POI story: ${closestPOI.name}");
       }
     } else {
       await _updateWhiteNoiseVolume(_volumeTriggerRadius);
+      _addDebugLog("No POI in range");
     }
   }
 
@@ -239,6 +250,36 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
+  void _addDebugLog(String message) {
+    setState(() {
+      _debugLogs.add("[${DateTime.now().toIso8601String()}] $message");
+    });
+  }
+
+  void _clearDebugLogs() {
+    setState(() {
+      _debugLogs.clear();
+    });
+  }
+
+  void _toggleDebugOverlay() {
+    setState(() {
+      _isDebugVisible = !_isDebugVisible;
+    });
+  }
+
+  Future<void> _toggleVolume() async {
+    setState(() {
+      _isVolumeEnabled = !_isVolumeEnabled;
+    });
+    if (_isVolumeEnabled) {
+      await _whiteNoisePlayer.setVolume(_currentVolume);
+    } else {
+      await _whiteNoisePlayer.setVolume(0.0);
+    }
+    _addDebugLog("Volume ${_isVolumeEnabled ? 'enabled' : 'disabled'}");
+  }
+
   @override
   void dispose() {
     _positionStream?.cancel();
@@ -254,21 +295,55 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(
         title: const Text('Leiwande Location'),
         backgroundColor: Colors.deepPurple,
+        actions: [
+          IconButton(
+            icon: Icon(_isVolumeEnabled ? Icons.volume_up : Icons.volume_off),
+            onPressed: _toggleVolume,
+            tooltip: 'Toggle sound',
+          ),
+        ],
       ),
-      body: CustomMap(
-        initialPosition: _currentLocation ?? _defaultLocation,
-        markers: _markers.values.toSet().union({
-          if (_currentLocation != null)
-            Marker(
-              markerId: const MarkerId('user_location'),
-              position: _currentLocation!,
-              infoWindow: const InfoWindow(title: "You are here"),
-              icon: BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueAzure),
+      body: Stack(
+        children: [
+          CustomMap(
+            initialPosition: _currentLocation ?? _defaultLocation,
+            markers: _markers.values.toSet(),
+            onMapCreated: (controller) => _mapController = controller,
+            onLongPress: _showAddPOIDialog,
+          ),
+          if (_isDebugVisible)
+            DebugOverlay(
+              logs: _debugLogs,
+              onClear: _clearDebugLogs,
+              isDarkTheme: Theme.of(context).brightness == Brightness.dark,
             ),
-        }),
-        onMapCreated: (controller) => _mapController = controller,
-        onTap: _showAddPOIDialog,
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                onPressed: _toggleDebugOverlay,
+                icon: const Text('🐛', style: TextStyle(fontSize: 20)),
+                tooltip: 'Toggle debug overlay',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  padding: const EdgeInsets.all(12),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

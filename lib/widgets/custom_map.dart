@@ -5,6 +5,7 @@ class CustomMap extends StatelessWidget {
   final LatLng initialPosition;
   final Set<Marker> markers;
   final Function(LatLng)? onTap;
+  final Function(LatLng)? onLongPress;
   final Function(GoogleMapController)? onMapCreated;
 
   const CustomMap({
@@ -13,11 +14,11 @@ class CustomMap extends StatelessWidget {
     required this.markers,
     this.onMapCreated,
     this.onTap,
+    this.onLongPress,
   });
 
   @override
   Widget build(BuildContext context) {
-
     return GoogleMap(
       onMapCreated: onMapCreated,
       initialCameraPosition: CameraPosition(
@@ -28,6 +29,7 @@ class CustomMap extends StatelessWidget {
       myLocationButtonEnabled: true,
       markers: markers,
       onTap: onTap,
+      onLongPress: onLongPress,
     );
   }
 }
