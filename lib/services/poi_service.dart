@@ -2,83 +2,48 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
+import '../models/poi.dart';
 
-class POI {
-  final String id;
-  final String name;
-  final double latitude;
-  final double longitude;
-  final String? story;
-  final double triggerRadius;
-
-  POI({
-    required this.id,
-    required this.name,
-    required this.latitude,
-    required this.longitude,
-    this.story,
-    this.triggerRadius = 20.0,
-  });
-
-  factory POI.fromJson(Map<String, dynamic> json) {
-    return POI(
-      id: json['id'],
-      name: json['name'],
-      latitude: json['latitude'],
-      longitude: json['longitude'],
-      story: json['story'],
-      triggerRadius: json['triggerRadius'] ?? 20.0,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'latitude': latitude,
-      'longitude': longitude,
-      'story': story,
-      'triggerRadius': triggerRadius,
-    };
-  }
-
-  double distanceTo(double lat, double lng) {
-    return Geolocator.distanceBetween(
-      latitude,
-      longitude,
-      lat,
-      lng,
-    );
-  }
-}
-
+/// Service for managing Points of Interest (POIs)
 class POIService {
   static const String _poiFilePath = 'assets/pois/pois.json';
   List<POI> _pois = [];
+  bool _isInitialized = false;
 
+  /// Returns all POIs, loading them first if necessary
+  Future<List<POI>> getPOIs() async {
+    if (!_isInitialized) {
+      await loadPOIs();
+    }
+    return _pois;
+  }
+
+  /// Loads POIs from the JSON file
   Future<void> loadPOIs() async {
     try {
       final String jsonString = await rootBundle.loadString(_poiFilePath);
       final List<dynamic> jsonList = json.decode(jsonString);
       _pois = jsonList.map((json) => POI.fromJson(json)).toList();
+      _isInitialized = true;
     } catch (e) {
       debugPrint('Error loading POIs: $e');
       _pois = [];
     }
   }
 
-  List<POI> getPOIs() => _pois;
-
+  /// Adds a new POI and persists the changes
   Future<void> addPOI(POI poi) async {
     _pois.add(poi);
     await _savePOIs();
   }
 
+  /// Removes a POI by ID and persists the changes
   Future<void> removePOI(String id) async {
     _pois.removeWhere((poi) => poi.id == id);
     await _savePOIs();
   }
 
+  /// Updates an existing POI and persists the changes
   Future<void> updatePOI(POI updatedPoi) async {
     final index = _pois.indexWhere((poi) => poi.id == updatedPoi.id);
     if (index != -1) {
@@ -87,26 +52,27 @@ class POIService {
     }
   }
 
-  Future<void> _savePOIs() async {
-    // Note: This is a placeholder. In a real app, you'd want to save to a file
-    // or database. For now, we'll just keep it in memory.
-    debugPrint('Saving POIs: ${_pois.length} items');
+  /// Finds POIs within a specified range of a location
+  List<POI> findPOIsInRange(double lat, double lng, double rangeMeters) {
+    return _pois.where((poi) => 
+      poi.isWithinRange(lat, lng, rangeMeters)
+    ).toList();
   }
 
+  /// Finds the closest POI to a given location
   POI? findClosestPOI(double lat, double lng) {
     if (_pois.isEmpty) return null;
 
-    POI closest = _pois.first;
-    double minDistance = closest.distanceTo(lat, lng);
+    return _pois.reduce((closest, poi) {
+      final closestDistance = closest.distanceTo(lat, lng);
+      final poiDistance = poi.distanceTo(lat, lng);
+      return poiDistance < closestDistance ? poi : closest;
+    });
+  }
 
-    for (var poi in _pois) {
-      final distance = poi.distanceTo(lat, lng);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closest = poi;
-      }
-    }
-
-    return closest;
+  /// Saves POIs (currently in-memory only)
+  Future<void> _savePOIs() async {
+    // TODO: Implement persistent storage
+    debugPrint('Saving POIs: ${_pois.length} items');
   }
 } 
