@@ -1,0 +1,82 @@
+[
+  {
+    "id": "arnswalder_platz",
+    "name": "Arnswalder Platz",
+    "latitude": 52.53095,
+    "longitude": 13.43398,
+    "story": "A charming neighborhood square in Prenzlauer Berg, Arnswalder Platz is a green oasis with beautiful old trees and benches. Named after the Pomeranian town of Arnswalde (now Choszczno, Poland), it's a beloved local meeting point.",
+    "triggerRadius": 30.0
+  },
+  {
+    "id": "lekr_lebensmittel",
+    "name": "Lekr Lebensmittel",
+    "latitude": 52.53124,
+    "longitude": 13.43331,
+    "story": "A beloved neighborhood Asian grocery store run by a friendly Vietnamese family. Locals come here not just for the authentic Asian ingredients and fresh produce, but also for the warm smiles and helpful cooking tips from the owners.",
+    "triggerRadius": 20.0
+  },
+  {
+    "id": "gasthaus_alt_wien",
+    "name": "Gasthaus Alt Wien",
+    "latitude": 52.53149,
+    "longitude": 13.43256,
+    "story": "A cozy piece of Vienna in the heart of Prenzlauer Berg. This traditional Austrian restaurant serves authentic Schnitzel and other Viennese classics in a warm, wood-paneled atmosphere that makes you feel like you've stepped into old Vienna.",
+    "triggerRadius": 25.0
+  },
+  {
+    "id": "leutemanns",
+    "name": "Leutemanns Café",
+    "latitude": 52.53114,
+    "longitude": 13.43315,
+    "story": "A quintessential Berlin café where the aroma of freshly baked goods mingles with the buzz of neighborhood conversations. Their handcrafted pastries and strong coffee have been bringing locals together for years.",
+    "triggerRadius": 20.0
+  },
+  {
+    "id": "mamas_banh",
+    "name": "Mama's Banh",
+    "latitude": 52.53108,
+    "longitude": 13.43440,
+    "story": "Home to some of the most authentic Vietnamese bánh mì in Berlin. The tiny shop fills the street with the enticing aromas of fresh herbs and grilled meats, while locals queue for their favorite sandwiches.",
+    "triggerRadius": 20.0
+  },
+  {
+    "id": "house_of_doan",
+    "name": "House of Do an - Vegetarisches",
+    "latitude": 52.53156,
+    "longitude": 13.43231,
+    "story": "A hidden gem serving creative vegetarian Vietnamese cuisine. The restaurant's modern take on traditional recipes has made it a favorite among locals seeking healthy, flavorful meals in a peaceful setting.",
+    "triggerRadius": 25.0
+  },
+  {
+    "id": "st_ambroeus",
+    "name": "Cantine St. Ambroeus",
+    "latitude": 52.53198,
+    "longitude": 13.43243,
+    "story": "Named after the patron saint of Milan, this Italian cantina brings authentic Milanese flavors to Prenzlauer Berg. Their homemade pasta and carefully selected wines transport you straight to northern Italy.",
+    "triggerRadius": 25.0
+  },
+  {
+    "id": "fahrradladen",
+    "name": "Fahrradladen Luft & Liebe",
+    "latitude": 52.53157,
+    "longitude": 13.43467,
+    "story": "A beloved local bike shop whose name translates to 'Bicycle Shop Air & Love'. They've been keeping the neighborhood's bikes running smoothly for years, embodying Berlin's cycling culture.",
+    "triggerRadius": 25.0
+  },
+  {
+    "id": "schuhbar",
+    "name": "schuhbar berlin",
+    "latitude": 52.53089,
+    "longitude": 13.43289,
+    "story": "A trendy shoe store that brings style to the Kiez. The shop's minimalist design and carefully curated selection reflect the neighborhood's creative spirit.",
+    "triggerRadius": 20.0
+  },
+  {
+    "id": "centralstation",
+    "name": "Centralstation Druck + Kopie",
+    "latitude": 52.53124,
+    "longitude": 13.43521,
+    "story": "A local printing shop that has served the community for years. More than just a copy shop, it's where neighbors come to print their photos, make copies, and chat with the friendly staff.",
+    "triggerRadius": 25.0
+  }
+] 

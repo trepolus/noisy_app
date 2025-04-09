@@ -29,6 +29,7 @@ flutter:
   assets:
     - assets/sounds/leiwand.m4a
     - assets/sounds/white_noise.mp3
+    - assets/pois/pois.json
   uses-material-design: true
 
 dependencies:

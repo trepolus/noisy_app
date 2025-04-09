@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../services/location_service.dart';
+import '../services/poi_service.dart';
 import '../widgets/custom_map.dart';
 
 class MapScreen extends StatefulWidget {
@@ -18,6 +19,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   final LocationService _locationService = LocationService();
+  final POIService _poiService = POIService();
   Map<MarkerId, Marker> _markers = {};
   final AudioPlayer _whiteNoisePlayer = AudioPlayer();
   double _currentVolume = 0.0;
@@ -32,14 +34,35 @@ class _MapScreenState extends State<MapScreen> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   Set<MarkerId> _alreadyPlayed = {}; // markers already triggered
 
-  static const double _triggerRadiusMeters = 20.0;
-
   @override
   void initState() {
     super.initState();
     _loadCurrentLocation();
     _startLiveLocation();
     _startWhiteNoise();
+    _loadPOIs();
+  }
+
+  Future<void> _loadPOIs() async {
+    await _poiService.loadPOIs();
+    _updatePOIMarkers();
+  }
+
+  void _updatePOIMarkers() {
+    final pois = _poiService.getPOIs();
+    setState(() {
+      _markers = {
+        for (var poi in pois)
+          MarkerId(poi.id): Marker(
+            markerId: MarkerId(poi.id),
+            position: LatLng(poi.latitude, poi.longitude),
+            infoWindow: InfoWindow(
+              title: poi.name,
+              snippet: poi.story,
+            ),
+          ),
+      };
+    });
   }
 
   Future<void> _loadCurrentLocation() async {
@@ -74,88 +97,98 @@ class _MapScreenState extends State<MapScreen> {
       );
 
       // 🔊 Dynamic white noise volume based on distance to closest POI
-      double closestDistance = double.infinity;
+      final closestPOI = _poiService.findClosestPOI(
+        newLocation.latitude,
+        newLocation.longitude,
+      );
 
-      for (var entry in _markers.entries) {
-        final marker = entry.value;
-        final distance = Geolocator.distanceBetween(
+      if (closestPOI != null) {
+        final distance = closestPOI.distanceTo(
           newLocation.latitude,
           newLocation.longitude,
-          marker.position.latitude,
-          marker.position.longitude,
         );
 
-        if (distance < closestDistance) {
-          closestDistance = distance;
+        double volume = 0.0;
+        if (distance <= _volumeTriggerRadius) {
+          volume = 1.0 - (distance / _volumeTriggerRadius);
+          volume = volume.clamp(_minVolume, _maxVolume);
+        }
+
+        if ((_currentVolume - volume).abs() > 0.01) {
+          _currentVolume = volume;
+          await _whiteNoisePlayer.setVolume(_currentVolume);
+        }
+
+        // Check if we're close enough to trigger the story
+        if (distance <= closestPOI.triggerRadius && 
+            !_alreadyPlayed.contains(MarkerId(closestPOI.id))) {
+          _showStoryDialog(closestPOI);
+          _alreadyPlayed.add(MarkerId(closestPOI.id));
+        }
+      } else {
+        if (_currentVolume > 0) {
+          _currentVolume = 0;
+          await _whiteNoisePlayer.setVolume(0);
         }
       }
-
-      double volume = 0.0;
-      if (closestDistance <= _volumeTriggerRadius) {
-        volume = 1.0 - (closestDistance / _volumeTriggerRadius);
-        volume = volume.clamp(_minVolume, _maxVolume);
-      } else {
-        volume = 0.0;
-      }
-
-      if ((_currentVolume - volume).abs() > 0.01) {
-        _currentVolume = volume;
-        await _whiteNoisePlayer.setVolume(_currentVolume);
-      }
     });
+  }
+
+  void _showStoryDialog(POI poi) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(poi.name),
+        content: Text(poi.story ?? 'No story available for this location.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _handleMapTap(LatLng latLng) {
-    final markerId = MarkerId('marker_${latLng.latitude}_${latLng.longitude}');
-
-    final marker = Marker(
-      markerId: markerId,
-      position: latLng,
-      infoWindow: InfoWindow(
-        title: 'Pinned Location',
-        snippet:
-            '${latLng.latitude.toStringAsFixed(4)}, ${latLng.longitude.toStringAsFixed(4)}',
-      ),
-      onTap: () {
-        setState(() {
-          _markers.remove(markerId); // 👈 remove on tap
-        });
-      },
-    );
-
-    setState(() {
-      _markers[markerId] = marker;
-    });
-  }
-
-  bool _isWithinRange(LatLng pos1, LatLng pos2, double thresholdMeters) {
-    final distance = Geolocator.distanceBetween(
-      pos1.latitude,
-      pos1.longitude,
-      pos2.latitude,
-      pos2.longitude,
-    );
-    return distance <= thresholdMeters;
-  }
-
-  void _showUnicornEmoji() {
-    final overlay = Overlay.of(context);
-    final entry = OverlayEntry(
-      builder: (context) => Positioned(
-        top: 100,
-        left: MediaQuery.of(context).size.width / 2 - 24,
-        child: const Text(
-          '🦄',
-          style: TextStyle(fontSize: 48),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add New POI'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                labelText: 'POI Name',
+                hintText: 'Enter a name for this location',
+              ),
+              onSubmitted: (name) async {
+                if (name.isNotEmpty) {
+                  final poi = POI(
+                    id: 'poi_${DateTime.now().millisecondsSinceEpoch}',
+                    name: name,
+                    latitude: latLng.latitude,
+                    longitude: latLng.longitude,
+                  );
+                  await _poiService.addPOI(poi);
+                  _updatePOIMarkers();
+                  if (context.mounted) {
+                    Navigator.of(context).pop();
+                  }
+                }
+              },
+            ),
+          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
-
-    overlay.insert(entry);
-
-    Future.delayed(const Duration(seconds: 2), () {
-      entry.remove();
-    });
   }
 
   void _startWhiteNoise() async {
@@ -174,20 +207,10 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final LatLng mapCenter = _currentLocation ?? _defaultLocation;
 
-    final Set<Marker> markers = {
-      Marker(
-        markerId: const MarkerId('current_location'),
-        position: mapCenter,
-        infoWindow: InfoWindow(
-          title: _currentLocation != null ? "You are here" : "Default Location",
-        ),
-      ),
-    };
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Leiwande Location'),
-        backgroundColor: Colors.deepPurple, // 🎨 Purple!
+        backgroundColor: Colors.deepPurple,
       ),
       body: CustomMap(
         initialPosition: mapCenter,
