@@ -41,9 +41,11 @@ class _MapScreenState extends State<MapScreen> {
   // Constants
   static const double _minVolume = 0.0;
   static const double _maxVolume = 1.0;
-  static const double _volumeTriggerRadius = 100.0;
+  static const double _volumeTriggerRadius = 50.0;
+  static const double _storyTriggerRadius = 10.0;
   static const double _defaultZoomLevel = 14.0;
   static const LatLng _defaultLocation = LatLng(52.52, 13.405); // Berlin
+  static const Duration _volumeUpdateInterval = Duration(milliseconds: 100);
 
   @override
   void initState() {
@@ -67,7 +69,7 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Future<void> _updateWhiteNoiseVolume(double distance) async {
-    if (!_isVolumeEnabled) return; // Don't update volume if muted
+    if (!_isVolumeEnabled) return;
 
     double newVolume = 0.0;
     if (distance <= _volumeTriggerRadius) {
@@ -78,7 +80,7 @@ class _MapScreenState extends State<MapScreen> {
     if ((_currentVolume - newVolume).abs() > 0.01) {
       _currentVolume = newVolume;
       await _whiteNoisePlayer.setVolume(_currentVolume);
-      _addDebugLog("Updated white noise volume: $_currentVolume");
+      _addDebugLog("Updated white noise volume: ${_currentVolume.toStringAsFixed(2)}");
     }
   }
 
@@ -106,20 +108,6 @@ class _MapScreenState extends State<MapScreen> {
         snippet: poi.story,
       ),
     );
-  }
-
-  Future<void> _handleNewPOI(String name, LatLng location) async {
-    if (name.isEmpty) return;
-
-    final poi = POI(
-      id: 'poi_${DateTime.now().millisecondsSinceEpoch}',
-      name: name,
-      latitude: location.latitude,
-      longitude: location.longitude,
-    );
-
-    await _poiService.addPOI(poi);
-    await _loadPOIs();
   }
 
   // Location Handling
@@ -154,12 +142,19 @@ class _MapScreenState extends State<MapScreen> {
     _updateLocation(newLocation);
     _addDebugLog("Location updated: ${position.latitude}, ${position.longitude}");
 
-    final closestPOI = _poiService.findClosestPOI(
+    final poisInRange = _poiService.findPOIsInRange(
       newLocation.latitude,
       newLocation.longitude,
+      _volumeTriggerRadius,
     );
 
-    if (closestPOI != null) {
+    if (poisInRange.isNotEmpty) {
+      final closestPOI = poisInRange.reduce((a, b) {
+        final distanceA = a.distanceTo(newLocation.latitude, newLocation.longitude);
+        final distanceB = b.distanceTo(newLocation.latitude, newLocation.longitude);
+        return distanceA < distanceB ? a : b;
+      });
+
       final distance = closestPOI.distanceTo(
         newLocation.latitude,
         newLocation.longitude,
@@ -168,7 +163,7 @@ class _MapScreenState extends State<MapScreen> {
       await _updateWhiteNoiseVolume(distance);
       _addDebugLog("Distance to closest POI (${closestPOI.name}): ${distance.toStringAsFixed(2)}m");
 
-      if (distance <= closestPOI.triggerRadius && 
+      if (distance <= _storyTriggerRadius && 
           !_triggeredPOIs.contains(closestPOI.id)) {
         _showStoryDialog(closestPOI);
         _triggeredPOIs.add(closestPOI.id);
@@ -202,8 +197,11 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showAddPOIDialog(LatLng location) {
-    showDialog(
+  Future<void> _addNewPOI(LatLng position) async {
+    final TextEditingController nameController = TextEditingController();
+    final TextEditingController storyController = TextEditingController();
+
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add New POI'),
@@ -211,29 +209,43 @@ class _MapScreenState extends State<MapScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              decoration: const InputDecoration(
-                labelText: 'POI Name',
-                hintText: 'Enter a name for this location',
-              ),
-              onSubmitted: (name) async {
-                if (name.isNotEmpty) {
-                  await _handleNewPOI(name, location);
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                  }
-                }
-              },
+              controller: nameController,
+              decoration: const InputDecoration(labelText: 'Name'),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: storyController,
+              decoration: const InputDecoration(labelText: 'Story'),
+              maxLines: 3,
             ),
           ],
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.pop(context, false),
             child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Add'),
           ),
         ],
       ),
     );
+
+    if (result == true && nameController.text.isNotEmpty && storyController.text.isNotEmpty) {
+      final newPOI = POI(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: nameController.text,
+        latitude: position.latitude,
+        longitude: position.longitude,
+        story: storyController.text,
+      );
+
+      await _poiService.addPOI(newPOI);
+      _addDebugLog("Added new POI: ${newPOI.name}");
+      await _loadPOIs();
+    }
   }
 
   void _showErrorDialog(String title, String message) {
@@ -312,7 +324,7 @@ class _MapScreenState extends State<MapScreen> {
             initialPosition: _currentLocation ?? _defaultLocation,
             markers: _markers.values.toSet(),
             onMapCreated: (controller) => _mapController = controller,
-            onLongPress: _showAddPOIDialog,
+            onLongPress: _addNewPOI,
           ),
           if (_isDebugVisible)
             DebugOverlay(

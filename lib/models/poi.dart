@@ -5,26 +5,23 @@ class POI {
   final String name;
   final double latitude;
   final double longitude;
-  final String? story;
-  final double triggerRadius;
+  final String story;
 
-  const POI({
+  POI({
     required this.id,
     required this.name,
     required this.latitude,
     required this.longitude,
-    this.story,
-    this.triggerRadius = 20.0,
+    required this.story,
   });
 
   factory POI.fromJson(Map<String, dynamic> json) {
     return POI(
       id: json['id'] as String,
       name: json['name'] as String,
-      latitude: (json['latitude'] as num).toDouble(),
-      longitude: (json['longitude'] as num).toDouble(),
-      story: json['story'] as String?,
-      triggerRadius: (json['triggerRadius'] as num?)?.toDouble() ?? 20.0,
+      latitude: json['latitude'] as double,
+      longitude: json['longitude'] as double,
+      story: json['story'] as String,
     );
   }
 
@@ -35,7 +32,6 @@ class POI {
       'latitude': latitude,
       'longitude': longitude,
       'story': story,
-      'triggerRadius': triggerRadius,
     };
   }
 
@@ -58,7 +54,6 @@ class POI {
     double? latitude,
     double? longitude,
     String? story,
-    double? triggerRadius,
   }) {
     return POI(
       id: id ?? this.id,
@@ -66,7 +61,6 @@ class POI {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       story: story ?? this.story,
-      triggerRadius: triggerRadius ?? this.triggerRadius,
     );
   }
 
