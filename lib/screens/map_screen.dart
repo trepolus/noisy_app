@@ -242,6 +242,10 @@ class _MapScreenState extends State<MapScreen> {
 
   // UI Elements
   void _showStoryDialog(POI poi) {
+    // Pause the ambient sound when showing the story
+    _stopAmbientSound();
+    _addDebugLog("Ambient sound paused for story dialog");
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -249,7 +253,19 @@ class _MapScreenState extends State<MapScreen> {
         content: Text(poi.story),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () {
+              Navigator.of(context).pop();
+              
+              // Resume ambient sound if in range
+              final distance = poi.distanceTo(
+                _currentLocation!.latitude,
+                _currentLocation!.longitude,
+              );
+              if (distance <= _volumeTriggerRadius && _isSoundEnabled) {
+                _updateAmbientVolume(distance);
+                _addDebugLog("Ambient sound resumed after story dialog");
+              }
+            },
             child: const Text('Close'),
           ),
         ],
