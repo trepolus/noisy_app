@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   // Controllers
   GoogleMapController? _mapController;
-  final AudioPlayer _whiteNoisePlayer = AudioPlayer();
+  final AudioPlayer _ambientPlayer = AudioPlayer();
   final AudioPlayer _storyPlayer = AudioPlayer();
 
   // Services
@@ -36,7 +37,8 @@ class _MapScreenState extends State<MapScreen> {
   double _currentVolume = 0.0;
   final List<String> _debugLogs = [];
   bool _isDebugVisible = false;
-  bool _isVolumeEnabled = true;
+  bool _isSoundEnabled = true;
+  String _currentAmbientSound = '';
 
   // Constants
   static const double _minVolume = 0.0;
@@ -46,6 +48,13 @@ class _MapScreenState extends State<MapScreen> {
   static const double _defaultZoomLevel = 14.0;
   static const LatLng _defaultLocation = LatLng(52.52, 13.405); // Berlin
   static const Duration _volumeUpdateInterval = Duration(milliseconds: 100);
+  static const List<String> _ambientSounds = [
+    'sounds/ambient_rainy.mp3',
+    'sounds/ambient_intro.mp3',
+    'sounds/ambient_calm.mp3',
+    'sounds/ambient_echoes.mp3',
+    'sounds/ambient_ethereal.mp3',
+  ];
 
   @override
   void initState() {
@@ -63,24 +72,75 @@ class _MapScreenState extends State<MapScreen> {
 
   // Audio Handling
   Future<void> _initializeAudio() async {
-    await _whiteNoisePlayer.setReleaseMode(ReleaseMode.loop);
-    await _whiteNoisePlayer.setVolume(0.0);
-    await _whiteNoisePlayer.play(AssetSource('sounds/white_noise.mp3'));
+    await _ambientPlayer.setReleaseMode(ReleaseMode.loop);
+    await _ambientPlayer.setVolume(0.0);
+    // Don't play audio yet, we'll play it when a POI is close enough
   }
 
-  Future<void> _updateWhiteNoiseVolume(double distance) async {
-    if (!_isVolumeEnabled) return;
+  String _getRandomAmbientSound() {
+    final random = Random();
+    return _ambientSounds[random.nextInt(_ambientSounds.length)];
+  }
+
+  Future<void> _playAmbientSound() async {
+    if (!_isSoundEnabled) return;
+    
+    // Choose a random ambient sound if none is currently playing
+    if (_currentAmbientSound.isEmpty) {
+      _currentAmbientSound = _getRandomAmbientSound();
+      _addDebugLog("Selected ambient sound: $_currentAmbientSound");
+      await _ambientPlayer.play(AssetSource(_currentAmbientSound));
+    }
+  }
+
+  Future<void> _changeAmbientSound() async {
+    if (!_isSoundEnabled) return;
+    
+    // If we're already playing a sound, choose a different one
+    String newSound;
+    do {
+      newSound = _getRandomAmbientSound();
+    } while (newSound == _currentAmbientSound && _ambientSounds.length > 1);
+    
+    _addDebugLog("Changing ambient sound to: $newSound");
+    
+    // Save current volume
+    final currentVolume = _currentVolume;
+    
+    // Stop current sound and play new one
+    await _ambientPlayer.stop();
+    _currentAmbientSound = newSound;
+    await _ambientPlayer.play(AssetSource(_currentAmbientSound));
+    await _ambientPlayer.setVolume(currentVolume);
+  }
+
+  Future<void> _stopAmbientSound() async {
+    await _ambientPlayer.stop();
+    _currentAmbientSound = '';
+    _addDebugLog("Stopped ambient sound");
+  }
+
+  Future<void> _updateAmbientVolume(double distance) async {
+    if (!_isSoundEnabled) return;
 
     double newVolume = 0.0;
     if (distance <= _volumeTriggerRadius) {
+      // Start playing if we're in range and not already playing
+      if (_currentAmbientSound.isEmpty) {
+        await _playAmbientSound();
+      }
+      
       newVolume = 1.0 - (distance / _volumeTriggerRadius);
       newVolume = newVolume.clamp(_minVolume, _maxVolume);
+    } else if (_currentAmbientSound.isNotEmpty) {
+      // Stop playing if we're out of range
+      await _stopAmbientSound();
     }
 
     if ((_currentVolume - newVolume).abs() > 0.01) {
       _currentVolume = newVolume;
-      await _whiteNoisePlayer.setVolume(_currentVolume);
-      _addDebugLog("Updated white noise volume: ${_currentVolume.toStringAsFixed(2)}");
+      await _ambientPlayer.setVolume(_currentVolume);
+      _addDebugLog("Updated ambient volume: ${_currentVolume.toStringAsFixed(2)}");
     }
   }
 
@@ -160,7 +220,7 @@ class _MapScreenState extends State<MapScreen> {
         newLocation.longitude,
       );
 
-      await _updateWhiteNoiseVolume(distance);
+      await _updateAmbientVolume(distance);
       _addDebugLog("Distance to closest POI (${closestPOI.name}): ${distance.toStringAsFixed(2)}m");
 
       if (distance <= _storyTriggerRadius && 
@@ -170,7 +230,7 @@ class _MapScreenState extends State<MapScreen> {
         _addDebugLog("Triggered POI story: ${closestPOI.name}");
       }
     } else {
-      await _updateWhiteNoiseVolume(_volumeTriggerRadius);
+      await _updateAmbientVolume(_volumeTriggerRadius + 1); // Ensure we're out of range
       _addDebugLog("No POI in range");
     }
   }
@@ -186,7 +246,7 @@ class _MapScreenState extends State<MapScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(poi.name),
-        content: Text(poi.story ?? 'No story available for this location.'),
+        content: Text(poi.story),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -282,23 +342,25 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Future<void> _toggleVolume() async {
+  Future<void> _toggleSound() async {
     setState(() {
-      _isVolumeEnabled = !_isVolumeEnabled;
+      _isSoundEnabled = !_isSoundEnabled;
     });
-    if (_isVolumeEnabled) {
-      await _whiteNoisePlayer.play(AssetSource('sounds/white_noise.mp3'));
-      await _whiteNoisePlayer.setVolume(_currentVolume);
+    if (_isSoundEnabled) {
+      if (_currentVolume > 0) {
+        await _playAmbientSound();
+        await _ambientPlayer.setVolume(_currentVolume);
+      }
     } else {
-      await _whiteNoisePlayer.stop();
+      await _stopAmbientSound();
     }
-    _addDebugLog("Volume ${_isVolumeEnabled ? 'enabled' : 'disabled'}");
+    _addDebugLog("Sound ${_isSoundEnabled ? 'enabled' : 'disabled'}");
   }
 
   @override
   void dispose() {
     _positionStream?.cancel();
-    _whiteNoisePlayer.dispose();
+    _ambientPlayer.dispose();
     _storyPlayer.dispose();
     _mapController?.dispose();
     super.dispose();
@@ -312,8 +374,13 @@ class _MapScreenState extends State<MapScreen> {
         backgroundColor: Colors.deepPurple,
         actions: [
           IconButton(
-            icon: Icon(_isVolumeEnabled ? Icons.volume_up : Icons.volume_off),
-            onPressed: _toggleVolume,
+            icon: const Icon(Icons.refresh),
+            onPressed: _changeAmbientSound,
+            tooltip: 'Change ambient sound',
+          ),
+          IconButton(
+            icon: Icon(_isSoundEnabled ? Icons.volume_up : Icons.volume_off),
+            onPressed: _toggleSound,
             tooltip: 'Toggle sound',
           ),
         ],

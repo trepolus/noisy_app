@@ -29,6 +29,11 @@ flutter:
   assets:
     - assets/sounds/leiwand.m4a
     - assets/sounds/white_noise.mp3
+    - assets/sounds/ambient_rainy.mp3
+    - assets/sounds/ambient_intro.mp3
+    - assets/sounds/ambient_calm.mp3
+    - assets/sounds/ambient_echoes.mp3
+    - assets/sounds/ambient_ethereal.mp3
     - assets/pois/pois.json
   uses-material-design: true
 
