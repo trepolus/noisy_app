@@ -9,6 +9,8 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../models/poi.dart';
 import '../services/location_service.dart';
 import '../services/poi_service.dart';
+import '../theme/app_theme.dart';
+import '../theme/map_style.dart';
 import '../widgets/custom_map.dart';
 import '../widgets/debug_overlay.dart';
 
@@ -160,12 +162,17 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Marker _createMarkerFromPOI(POI poi) {
+    final BitmapDescriptor markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+      BitmapDescriptor.hueAzure
+    );
+    
     return Marker(
       markerId: MarkerId(poi.id),
       position: LatLng(poi.latitude, poi.longitude),
+      icon: markerIcon,
       infoWindow: InfoWindow(
         title: poi.name,
-        snippet: poi.story,
+        snippet: poi.story.length > 50 ? '${poi.story.substring(0, 50)}...' : poi.story,
       ),
     );
   }
@@ -248,27 +255,49 @@ class _MapScreenState extends State<MapScreen> {
     
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(poi.name),
-        content: Text(poi.story),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              
-              // Resume ambient sound if in range
-              final distance = poi.distanceTo(
-                _currentLocation!.latitude,
-                _currentLocation!.longitude,
-              );
-              if (distance <= _volumeTriggerRadius && _isSoundEnabled) {
-                _updateAmbientVolume(distance);
-                _addDebugLog("Ambient sound resumed after story dialog");
-              }
-            },
-            child: const Text('Close'),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: AppTheme.dialogDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                poi.name,
+                style: AppTheme.dialogTitle,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                poi.story,
+                style: AppTheme.dialogContent,
+              ),
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    
+                    // Resume ambient sound if in range
+                    final distance = poi.distanceTo(
+                      _currentLocation!.latitude,
+                      _currentLocation!.longitude,
+                    );
+                    if (distance <= _volumeTriggerRadius && _isSoundEnabled) {
+                      _updateAmbientVolume(distance);
+                      _addDebugLog("Ambient sound resumed after story dialog");
+                    }
+                  },
+                  style: AppTheme.closeButton,
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -279,33 +308,53 @@ class _MapScreenState extends State<MapScreen> {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add New POI'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: storyController,
-              decoration: const InputDecoration(labelText: 'Story'),
-              maxLines: 3,
-            ),
-          ],
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: AppTheme.dialogDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Add New Location',
+                style: AppTheme.dialogTitle,
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: nameController,
+                style: const TextStyle(color: Colors.white),
+                decoration: AppTheme.inputDecoration('Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: storyController,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 5,
+                decoration: AppTheme.inputDecoration('Story'),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    style: AppTheme.secondaryButton,
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: AppTheme.primaryButton,
+                    child: const Text('Add'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
 
@@ -327,15 +376,47 @@ class _MapScreenState extends State<MapScreen> {
   void _showErrorDialog(String title, String message) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: AppTheme.errorDialogDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: Colors.redAccent,
+                    size: 28,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    title,
+                    style: AppTheme.dialogTitle,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                message,
+                style: AppTheme.dialogContent,
+              ),
+              const SizedBox(height: 20),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: AppTheme.errorButton,
+                  child: const Text('OK'),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -382,20 +463,33 @@ class _MapScreenState extends State<MapScreen> {
     super.dispose();
   }
 
+  void _setMapStyle(GoogleMapController controller) {
+    controller.setMapStyle(MapStyle.darkMap);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text('Leiwande Location'),
-        backgroundColor: Colors.deepPurple,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        centerTitle: false,
+        title: const Text(
+          'Noisy',
+          style: AppTheme.appBarTitle,
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.music_note, color: Colors.white),
             onPressed: _changeAmbientSound,
             tooltip: 'Change ambient sound',
           ),
           IconButton(
-            icon: Icon(_isSoundEnabled ? Icons.volume_up : Icons.volume_off),
+            icon: Icon(
+              _isSoundEnabled ? Icons.volume_up : Icons.volume_off, 
+              color: Colors.white
+            ),
             onPressed: _toggleSound,
             tooltip: 'Toggle sound',
           ),
@@ -406,36 +500,28 @@ class _MapScreenState extends State<MapScreen> {
           CustomMap(
             initialPosition: _currentLocation ?? _defaultLocation,
             markers: _markers.values.toSet(),
-            onMapCreated: (controller) => _mapController = controller,
+            onMapCreated: (controller) {
+              _mapController = controller;
+              _setMapStyle(controller);
+            },
             onLongPress: _addNewPOI,
           ),
           if (_isDebugVisible)
             DebugOverlay(
               logs: _debugLogs,
               onClear: _clearDebugLogs,
-              isDarkTheme: Theme.of(context).brightness == Brightness.dark,
+              isDarkTheme: true,
             ),
           Positioned(
             left: 16,
             bottom: 16,
             child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
+              decoration: AppTheme.floatingButtonDecoration,
               child: IconButton(
                 onPressed: _toggleDebugOverlay,
-                icon: const Text('🐛', style: TextStyle(fontSize: 20)),
+                icon: const Icon(Icons.bug_report, color: Colors.white70),
                 tooltip: 'Toggle debug overlay',
                 style: IconButton.styleFrom(
-                  backgroundColor: Colors.white,
                   padding: const EdgeInsets.all(12),
                 ),
               ),

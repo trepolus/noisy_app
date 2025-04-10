@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'screens/map_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(AppTheme.systemOverlayStyle);
   runApp(const MyApp());
 }
 
@@ -10,9 +14,11 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
+      title: 'Noisy',
       debugShowCheckedModeBanner: false,
-      home: MapScreen(),
+      theme: AppTheme.darkTheme,
+      home: const MapScreen(),
     );
   }
 }
